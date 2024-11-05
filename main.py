@@ -161,9 +161,12 @@ class OllamaChat(QWidget):
             Qt.WindowType.FramelessWindowHint | 
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool |
-            Qt.WindowType.MSWindowsFixedSizeDialogHint  # Add this flag to prevent resizing
+            Qt.WindowType.MSWindowsFixedSizeDialogHint |
+            Qt.WindowType.WindowSystemMenuHint  # Add this flag
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setMouseTracking(True)
+        self.installEventFilter(self)
         
         # Set fixed size policy
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -1344,6 +1347,10 @@ class OllamaChat(QWidget):
         self.vertical_button.raise_()  # Ensure the button is on top
 
     def toggle_sidebar(self):
+        # Add at the beginning of the method
+        if hasattr(self, 'animation') and self.animation and self.animation.state() == QPropertyAnimation.State.Running:
+            return
+        
         # Get the screen that contains the window
         current_screen = QApplication.screenAt(self.geometry().center())
         if not current_screen:
@@ -1550,41 +1557,14 @@ class OllamaChat(QWidget):
         self.input_field.setFocus()
 
     def eventFilter(self, obj, event):
-        if obj is self.input_field:
-            if event.type() == QEvent.Type.KeyPress:
-                if self.suggestion_list.isVisible():
-                    if event.key() == Qt.Key.Key_Up:
-                        self.handle_suggestion_navigation(event.key())
-                        return True
-                    elif event.key() == Qt.Key.Key_Down:
-                        self.handle_suggestion_navigation(event.key())
-                        return True
-                    elif event.key() == Qt.Key.Key_Return:
-                        if self.suggestion_list.currentItem():
-                            self.insert_suggestion(self.suggestion_list.currentItem())
-                            return True
-                    elif event.key() == Qt.Key.Key_Escape:
-                        self.suggestion_list.hide()
-                        return True
-                
-                # Handle Ctrl+Up and Ctrl+Down for message editing
-                if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-                    if event.key() == Qt.Key.Key_Up:
-                        self.show_previous_message()
-                        return True
-                    elif event.key() == Qt.Key.Key_Down:
-                        self.show_next_message()
-                        return True
-                
-                # Regular Enter key handling
-                if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
-                    if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                        cursor = self.input_field.textCursor()
-                        cursor.insertText('\n')
-                        return True
-                    else:
-                        self.send_message()
-                        return True
+        if obj == self:
+            if event.type() == QEvent.Type.WindowDeactivate:
+                # When window loses focus, check if sidebar is expanded
+                if self.sidebar_expanded:
+                    # Use QTimer to slightly delay the collapse to avoid issues
+                    QTimer.singleShot(100, self.toggle_sidebar)
+        
+        # Make sure to call the existing eventFilter for input field handling
         return super().eventFilter(obj, event)
 
     def restore_size(self):

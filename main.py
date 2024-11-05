@@ -160,9 +160,13 @@ class OllamaChat(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint | 
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool  # Add this flag
+            Qt.WindowType.Tool |
+            Qt.WindowType.MSWindowsFixedSizeDialogHint  # Add this flag to prevent resizing
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        # Set fixed size policy
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         
         # Load the stylesheet
         style_path = os.path.join(os.path.dirname(__file__), 'styles.qss')
@@ -177,21 +181,6 @@ class OllamaChat(QWidget):
         widget_layout = QVBoxLayout(main_widget)
         widget_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.addWidget(main_widget)
-
-        # Add size grip for resizing at the top-left
-        size_grip = QSizeGrip(self)
-        size_grip.setFixedSize(20, 20)
-        size_grip.installEventFilter(self)  # Install event filter to catch double clicks
-        
-        # Create a container for the size grip
-        grip_container = QWidget()
-        grip_layout = QHBoxLayout(grip_container)
-        grip_layout.setContentsMargins(0, 0, 0, 0)
-        grip_layout.addWidget(size_grip)
-        grip_layout.addStretch(1)
-        
-        # Add the grip container to the top of the widget layout
-        widget_layout.insertWidget(0, grip_container)
 
         # Header
         header = QHBoxLayout()
@@ -215,6 +204,14 @@ class OllamaChat(QWidget):
         self.settings_btn.clicked.connect(self.toggle_settings)
         header.addWidget(self.settings_btn)
 
+        # Add monitor switch button
+        self.monitor_btn = QPushButton()
+        self.monitor_btn.setIcon(QIcon("icons/monitor.png"))
+        self.monitor_btn.setFixedSize(26, 26)
+        self.monitor_btn.setToolTip("Switch Monitor")
+        self.monitor_btn.setObjectName("monitorButton")
+        self.monitor_btn.clicked.connect(self.switch_monitor)
+        header.addWidget(self.monitor_btn)
 
         # Add close button
         self.close_btn = QPushButton()
@@ -1101,12 +1098,17 @@ class OllamaChat(QWidget):
 
     def position_window(self):
         screen = QApplication.primaryScreen().availableGeometry()
-        padding = 20  # Adjust this value to change the padding
+        padding = 0  # Padding dal bordo destro
+        # Imposta l'altezza della finestra uguale all'altezza dello schermo
+        self.compact_size = QSize(400, screen.height())
+        self.expanded_size = QSize(int(screen.width() * 0.5), screen.height())
+        
+        # Posiziona la finestra in alto a destra
         self.setGeometry(
             screen.width() - self.compact_size.width() - padding,
-            screen.height() - self.compact_size.height() - padding,
+            0,  # 0 per allineare in alto
             self.compact_size.width(),
-            self.compact_size.height(),
+            self.compact_size.height()
         )
 
     def toggle_window_size(self):
@@ -1342,29 +1344,37 @@ class OllamaChat(QWidget):
         self.vertical_button.raise_()  # Ensure the button is on top
 
     def toggle_sidebar(self):
-        screen = QApplication.primaryScreen().availableGeometry()
+        # Get the screen that contains the window
+        current_screen = QApplication.screenAt(self.geometry().center())
+        if not current_screen:
+            current_screen = QApplication.primaryScreen()
+        screen = current_screen.availableGeometry()
         
         if self.animation and self.animation.state() == QPropertyAnimation.State.Running:
             self.animation.stop()
         
-        self.animation = QPropertyAnimation(self, b"geometry")
-        self.animation.setDuration(100)
-        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        
         current_geometry = self.geometry()
         
         if self.sidebar_expanded:
-            # Collapse the sidebar - reduce width and height
+            # Collapse the sidebar
             self.previous_geometry = current_geometry
             collapsed_width = self.vertical_button.width() + 4
             collapsed_height = 96  # Reduced height when collapsed
             
             # Calculate new position to center vertically
             new_y = current_geometry.y() + (current_geometry.height() - collapsed_height) // 2
-            new_x = int(screen.right() - collapsed_width * 0.75)
+            new_x = screen.right() - collapsed_width
             
-            new_rect = QRect(new_x, new_y, collapsed_width, collapsed_height)
-            self.animation.setEndValue(new_rect)
+            # Immediately change height
+            self.setGeometry(current_geometry.x(), new_y, current_geometry.width(), collapsed_height)
+            
+            # Animate only the width
+            self.animation = QPropertyAnimation(self, b"geometry")
+            self.animation.setDuration(100)
+            self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            self.animation.setStartValue(self.geometry())
+            self.animation.setEndValue(QRect(new_x, new_y, collapsed_width, collapsed_height))
+            
             self.sidebar_expanded = False
             self.vertical_button.setIcon(self.left_arrow_icon)
             
@@ -1378,9 +1388,19 @@ class OllamaChat(QWidget):
             self.close_btn.hide()
             self.toggle_btn.hide()
         else:
-            # Expand the sidebar - restore previous size and position
+            # Expand the sidebar
             if self.previous_geometry:
+                # Immediately change height
+                self.setGeometry(current_geometry.x(), self.previous_geometry.y(), 
+                               current_geometry.width(), self.previous_geometry.height())
+                
+                # Animate only the width
+                self.animation = QPropertyAnimation(self, b"geometry")
+                self.animation.setDuration(100)
+                self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+                self.animation.setStartValue(self.geometry())
                 self.animation.setEndValue(self.previous_geometry)
+                
             self.sidebar_expanded = True
             self.vertical_button.setIcon(self.right_arrow_icon)
             
@@ -1417,25 +1437,6 @@ class OllamaChat(QWidget):
         # Call the base class paintEvent to ensure default painting
         super().paintEvent(event)
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.dragging = True
-            self.drag_start_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-
-    def mouseMoveEvent(self, event):
-        if self.dragging:
-            new_position = event.globalPosition().toPoint() - self.drag_start_position
-            if not self.sidebar_expanded:
-                # Only allow vertical movement when sidebar is contracted
-                new_position.setX(self.geometry().x())
-            self.move(new_position)
-            event.accept()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.dragging = False
-            event.accept()
 
     def show_error_message(self, title, message):
         error_box = QMessageBox(self)
@@ -1584,12 +1585,6 @@ class OllamaChat(QWidget):
                     else:
                         self.send_message()
                         return True
-
-        elif isinstance(obj, QSizeGrip):
-            if event.type() == QEvent.Type.MouseButtonDblClick:
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.restore_size()
-                    return True
         return super().eventFilter(obj, event)
 
     def restore_size(self):
@@ -1855,6 +1850,50 @@ class OllamaChat(QWidget):
         # Only send to Ollama if it's a new message, not an edit
         if self.edit_index is None:
             self.send_to_ollama()
+
+    def switch_monitor(self):
+        screens = QApplication.screens()
+        if not screens:
+            return
+        
+        # Get current screen
+        current_screen = QApplication.screenAt(self.geometry().center())
+        if not current_screen:
+            current_screen = screens[0]
+        
+        # Find next screen
+        current_index = screens.index(current_screen)
+        next_index = (current_index + 1) % len(screens)
+        next_screen = screens[next_index]
+        
+        # Get current window geometry
+        current_geo = self.geometry()
+        
+        # Get the available geometry of the next screen (accounts for taskbar/dock)
+        next_screen_geo = next_screen.availableGeometry()
+        
+        # Calculate new dimensions
+        if self.is_expanded:
+            # If expanded, use expanded size proportions
+            new_width = int(next_screen_geo.width() * 0.5)  # 50% of screen width
+            new_height = next_screen_geo.height()  # Full screen height
+            self.expanded_size = QSize(new_width, new_height)
+        else:
+            # If compact, maintain compact width but adjust height
+            new_width = self.compact_size.width()  # Keep current compact width
+            new_height = next_screen_geo.height()  # Full screen height
+            self.compact_size = QSize(new_width, new_height)
+        
+        # Calculate new position (always align to right side)
+        new_x = next_screen_geo.right() - new_width
+        new_y = next_screen_geo.top()  # Align to top of screen
+        
+        # Move and resize window
+        self.setGeometry(new_x, new_y, new_width, new_height)
+        
+        # Update the original sizes for this screen
+        self.original_expanded_size = QSize(int(next_screen_geo.width() * 0.5), next_screen_geo.height())
+        self.original_compact_size = QSize(400, next_screen_geo.height())
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

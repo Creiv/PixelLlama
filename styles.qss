@@ -1,7 +1,8 @@
 QWidget#mainWidget {
     background-color: #1E1E1E;
-    border-radius: 20px;
-    border: 2px solid #7289DA;
+    border-radius: 10px;
+    margin-top: 0;
+    padding-top: 0;
 }
 
 QLabel {
@@ -42,17 +43,14 @@ QPushButton:hover {
 }
 
 QPushButton#verticalButton {
-    background-color: #1E1E1E;
-    margin-left: 2px;
-    border: 2px solid #2d2d2d;
-    border-top-left-radius: 0px;
-    border-bottom-left-radius: 0px;
-    border-top-right-radius: 10px;
-    border-bottom-right-radius: 10px;
+    background-color: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
 }
 
 QPushButton#verticalButton:hover {
-    background-color: #1c1c1c;
+    background: rgba(114, 137, 218, 0.1);
 }
 
 QComboBox {
@@ -156,4 +154,46 @@ QTextEdit#inputField {
 
 #modelCameraButton:pressed {
     background: rgba(114, 137, 218, 0.2);
+}
+
+/* Aggiorna lo stile dei bottoni per mantenere dimensioni uniformi */
+QPushButton#sendButton, QPushButton#screenshotButton {
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    max-height: 30px;
+    padding: 5px;
+    border-radius: 4px;
+}
+
+QPushButton#headerButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+    margin: 0px;
+}
+
+QPushButton#headerButton:hover {
+    background-color: rgba(114, 137, 218, 0.1);
+}
+
+QPushButton#headerButton:pressed {
+    background-color: rgba(114, 137, 218, 0.2);
+}
+
+QPushButton#monitorButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+    margin: 0px;
+}
+
+QPushButton#monitorButton:hover {
+    background-color: rgba(114, 137, 218, 0.1);
+}
+
+QPushButton#monitorButton:pressed {
+    background-color: rgba(114, 137, 218, 0.2);
 }

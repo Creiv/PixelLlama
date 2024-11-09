@@ -17,6 +17,8 @@ from utils.settings_manager import (
     get_system_prompt, 
 )
 
+from utils.chat_storage import ChatStorage
+
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -165,8 +167,8 @@ class OllamaChat(QWidget):
         self.expanded_size = QSize(
             int(screen.width() * 0.5), int(screen.height() * 0.75)
         )
-        self.message_history = []
-        self.chat_content = []
+
+
         self.current_response = ""
         self.is_expanded = False
         self.selected_screenshot = None
@@ -201,6 +203,12 @@ class OllamaChat(QWidget):
         self.is_settings_visible = False
         self.update_input_position()
         self.create_tray_icon()
+
+        # Load chat history
+        self.chat_content = []
+        self.chat_storage = ChatStorage()
+        self.message_history = self.chat_storage.load_chat_history()        
+       
         self.dragging = False
         self.drag_start_position = None
 
@@ -1590,6 +1598,7 @@ class OllamaChat(QWidget):
         self.selected_screenshot = None
         self.screenshot_btn.setStyleSheet(self.original_button_style)
         self.active_model = None  # Reset the active model when clearing chat
+        self.chat_storage.save_chat_history(self.message_history)
 
     def position_window(self):
         screen = QApplication.primaryScreen().availableGeometry()
@@ -2160,6 +2169,7 @@ class OllamaChat(QWidget):
     def handle_close_button_click(self):
         """Handle the close button click event."""
         if QApplication.keyboardModifiers() == Qt.KeyboardModifier.ControlModifier:
+            self.chat_storage.save_chat_history(self.message_history)
             self.terminate_application()
         else:
             self.hide()
@@ -2238,6 +2248,10 @@ class OllamaChat(QWidget):
             if is_online != self.provider_online:  # Only update if state changed
                 self.provider_online = is_online
                 self.update_gradient_state()  # Update gradient
+                
+                # If we just came online and have messages, display them
+                if is_online and len(self.message_history) > 0:
+                    self.rebuild_chat_content()
 
             self.chat_display.page().runJavaScript(
                 f"updateProviderStatus({str(is_online).lower()})"
